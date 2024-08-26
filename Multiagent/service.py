@@ -1,4 +1,4 @@
-import asyncio, pprint
+import asyncio, pprint, os
 from PIL import Image, ImageDraw
 import hashlib, random
 import json
@@ -276,6 +276,8 @@ def _maybe_moving_to(cur_loc, action_txt):
 class NPCService(Moobius):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        if not os.path.exists('debug'):
+            os.makedirs('debug') # Ensure exists.
         self.imp = {}
         self.npcs = {} # Dict from name to Character.
         self.convo_active = {} # Is there an conversation on a given channel.
@@ -362,7 +364,7 @@ class NPCService(Moobius):
             if ai_word_find:
                 await self.send_message('<thinking>', channel_id=channel_id, sender=speaker_id, recipients=char_ids)
             gpt_txt = await gpt.gpt_get_answer(the_messages)
-            with open('debug_last_prompt.txt', 'w') as f:
+            with open('debug/debug_last_prompt.txt', 'w') as f:
                 json.dump(the_messages, f, indent=3)
             if is_reAct:
                 tmp_sgn = '--<>--'
