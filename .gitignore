@@ -1,0 +1,15 @@
+__pycache__/
+*/__pycache__/
+
+*/json_db/
+*/logs/
+*/config/service.json
+*/config/agent.json
+*/config/service.json
+*/config/config.json
+*/config/service.json
+*/config/config.json
+*/temp/
+
+.idea/
+/venv/
