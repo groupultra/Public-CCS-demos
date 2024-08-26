@@ -4,7 +4,7 @@ import hashlib, random
 import json
 from loguru import logger
 
-from moobius import Moobius, MoobiusStorage
+from moobius import Moobius, MoobiusStorage, MoobiusWand
 from moobius.types import Button, ButtonClick, MessageBody, InputComponent, Dialog
 from moobius import types
 
@@ -560,3 +560,7 @@ class NPCService(Moobius):
             await self.step_conversation(message_up.channel_id, speaker_id=message_up.sender, txt=message_up.content.text)
         else:
             await self.send_message(message_up)
+
+
+if __name__ == "__main__":
+    MoobiusWand().run(NPCService, config='config/config.json')
