@@ -10,6 +10,7 @@ __pycache__/
 */config/service.json
 */config/config.json
 */temp/
+Multiagent/debug/*
 
 .idea/
 /venv/
