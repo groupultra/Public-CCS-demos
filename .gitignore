@@ -9,6 +9,18 @@ __pycache__/
 */config/config.json
 */config/service.json
 */config/config.json
+*/config/usermode_account.json
+*/config/usermode_config.json
+*/config/usermode_db.json
+*/config/serviceAC/*.json
+*/config/serviceB/*.json
+*/config/serviceD/*.json
+*/config/serviceE/*.json
+*/config/serviceF/*.json
+*/config/user/*.json
+*/config/userD/*.json
+*/config/userE/*.json
+*/config/userF/*.json
 */temp/
 Multiagent/debug/*
 
