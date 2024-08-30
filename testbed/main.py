@@ -13,7 +13,7 @@ from loguru import logger
 include_user = True # usermode.
 do_simple_spells = False
 test_json_encode = False
-config_mode = 'D' # ['A', 'B', or 'C', 'D'] test different modes. A = standard. B = all mashed up. C = individual files specified. D = 'A' but moobius.ai instead.
+config_mode = 'O' # ['A', 'B', or 'C', 'O'] test different modes. A = standard. B = all mashed up. C = individual files specified. O = 'A' but moobius.ai instead.
 
 
 if __name__ == "__main__":
@@ -40,12 +40,14 @@ if __name__ == "__main__":
         handle = wand.run(TestbedService, config='config/serviceB/config.json', background=True)
     elif config_mode == 'C':
         handle = wand.run(TestbedService, db_config='config/serviceAC/db.json', service_config='config/serviceAC/service.json', account_config='config/serviceAC/account.json', log_config='config/serviceAC/log.json', background=True)
-    elif config_mode == 'D':
-        handle = wand.run(TestbedService, db_config='config/serviceD/db.json', service_config='config/serviceD/service.json', account_config='config/serviceD/account.json', log_config='config/serviceD/log.json', background=True)
+    elif config_mode == 'O':
+        handle = wand.run(TestbedService, db_config='config/db.json', service_config='config/service.json', account_config='config/account.json', log_config='config/log.json', background=True)
 
     if include_user:
-        cfg_file = 'config/userD/usermode_config.json' if config_mode == 'D' else 'config/user/usermode_config.json'
-        user_handle = wand.run(TestbedUser, config=cfg_file, background=True)
+        if config_mode == 'O':
+            handle = wand.run(TestbedUser, service_config='config/usermode_service.json', account_config='config/usermode_account.json', log_config='config/usermode_log.json', background=True)
+        else:
+            TODO
     else:
         user_handle = None
         logger.warning('Agent has been DISABLED this run (debugging).')

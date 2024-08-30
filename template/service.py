@@ -146,7 +146,7 @@ class TemplateService(Moobius):
                 elif txt1 == "reset":
                     for sn in range(self.mickey_LIMIT):
                         the_character_id = the_channel.puppet_characters[f"Mickey_{sn}"].character_id
-                        await self.update_agent(agent_id=the_character_id, avatar=self.image_paths["Mickey"], description='Mickey reset!', name=f'Mickey {sn}')
+                        await self.update_agent(character=the_character_id, avatar=self.image_paths["Mickey"], description='Mickey reset!', name=f'Mickey {sn}')
 
                     for usr in to_whom:
                         if usr in the_channel.states:

@@ -231,7 +231,7 @@ class TestbedService(Moobius):
                         the_character_id = the_channel.puppet_characters[f"{self.MICKEY}_{sn}"]
                         if sn>1:
                             the_character_id = the_character_id.character_id # Should work with both IDs and the Character objects.
-                        await self.update_agent(agent_id=the_character_id, avatar=self.image_paths[self.MICKEY], description='Mickey reset!', name=f'Mickey {sn}')
+                        await self.update_agent(character=the_character_id, avatar=self.image_paths[self.MICKEY], description='Mickey reset!', name=f'Mickey {sn}')
 
                     for usr in to_whom:
                         if usr in the_channel.states:
@@ -610,7 +610,7 @@ class TestbedService(Moobius):
                 else:
                     sn = the_channel.states[who_clicked]['mickey_num'] - 1
                     the_character_id = the_channel.puppet_characters[f"{self.MICKEY}_{sn}"].character_id
-                    await self.update_agent(agent_id=the_character_id, avatar=image_path, description='Mickey updated name!', name=f'Update Mickey Nick {self.n_usr_update}')
+                    await self.update_agent(character=the_character_id, avatar=image_path, description='Mickey updated name!', name=f'Update Mickey Nick {self.n_usr_update}')
                     await self.calculate_and_update_character_list_from_database(channel_id, to_whom[0])
                     await self.send_message(f"Updated Mickey name and image (may need a refresh).", channel_id, who_clicked, to_whom)
             elif value == "List Characters".lower():

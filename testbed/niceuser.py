@@ -26,8 +26,6 @@ class TestbedUser(Moobius):
         """Listen to messages the user sends and respond to them."""
         channel_id = message_down.channel_id
         content = message_down.content
-        if not channel_id in self.channels or not self.channels[channel_id]:
-            self.channels[channel_id] = MoobiusStorage(self.client_id, channel_id, db_config=self.config['db_config'])
 
         if message_down.sender == self.client_id:
             return # Avoid an infinite loop of responding to our messages.
@@ -104,15 +102,9 @@ class TestbedUser(Moobius):
             if type(character_id) is not str:
                 raise Exception('The characters in update should be a list of character ids.') # Extra assert just in case.
             c_id = update.channel_id
-            while c_id not in self.channels:
-                logger.info(f'User waiting (for on_start) while update characters for channel: {c_id}')
-                await asyncio.sleep(2)
-
-            self.channels[c_id].characters[character_id] = character_profile
 
     async def on_update_buttons(self, update):
         self.most_recent_updates['on_update_buttons'] = update
-        self.channels[update.channel_id].buttons = [c.button for c in update.content]
 
     async def on_update_canvas(self, update):
         self.most_recent_updates['on_update_canvas'] = update
@@ -137,15 +129,11 @@ class TestbedUser(Moobius):
                 await self.refresh_socket(channel_id)
         elif text == "send_button_click_key1":
             for channel_id in self.channels.keys():
-                for button in self.channels[channel_id].buttons:
-                    if button['button_id'] == "key1":
-                        await self.send_button_click("key1", [('arg1', "Meet Tubbs")], channel_id)
+                await self.send_button_click("key1", [('arg1', "Meet Tubbs")], channel_id)
         elif text == "send_button_click_key2":
             for channel_id in self.channels.keys():
-                for button in self.channels[channel_id].buttons:
-                    if button['button_id'] == "key2":
-                        await self.send_button_click("key2", [], channel_id)
+                await self.send_button_click("key2", [], channel_id)
         elif text == "nya_all":
             for channel_id in self.channels.keys():
-                recipients = list(self.channels[channel_id].characters.keys())
+                recipients = await self.fetch_member_ids()
                 await self.send_message("nya nya nya", channel_id, recipients)

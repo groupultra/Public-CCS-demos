@@ -3,6 +3,7 @@ __pycache__/
 
 */json_db/
 */logs/
+*/config/config.json
 */config/service.json
 */config/agent.json
 */config/service.json

@@ -158,7 +158,7 @@ class DemoService(Moobius):
                 elif txt1 == "reset":
                     for sn in range(self.MICKEY_LIMIT):
                         the_character_id = the_channel.puppet_characters[f"{self.MICKEY}_{sn}"].character_id
-                        await self.update_agent(agent_id=the_character_id, avatar=self.image_paths[self.MICKEY], description='Mickey reset!', name=f'Mickey {sn}')
+                        await self.update_agent(character=the_character_id, avatar=self.image_paths[self.MICKEY], description='Mickey reset!', name=f'Mickey {sn}')
 
                     for usr in to_whom:
                         if usr in the_channel.states:
@@ -410,7 +410,7 @@ class DemoService(Moobius):
                 else:
                     sn = the_channel.states[who_clicked]['mickey_num'] - 1
                     the_character_id = the_channel.puppet_characters[f"{self.MICKEY}_{sn}"].character_id
-                    await self.update_agent(agent_id=the_character_id, avatar=image_path, description='Mickey updated name!', name=f'Update Mickey Nick {self.n_usr_update}')
+                    await self.update_agent(character=the_character_id, avatar=image_path, description='Mickey updated name!', name=f'Update Mickey Nick {self.n_usr_update}')
                     await self.send_message(f"Updated Mickey name and image (refresh to see).", channel_id, who_clicked, to_whom)
             elif value == "List Characters".lower():
                 char_list = await self.fetch_agents()
