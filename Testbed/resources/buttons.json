@@ -9,7 +9,7 @@
                     "label": "Select The Task",
                     "type": "dropdown",
                     "required": false,
-                    "choices": ["TextMessage", "CardMessage", "ImagePath", "AudioPath", "file_path", "ImageGivenTextPath", "DownloadGivenImagePath", "DownloadGivenImagePathWithRename", "EmptyRecip", "Swap Canvas", "Test Socket Asserts", "Fetch Chat History", "Fetch Buttons", "Fancy Right Click"],
+                    "choices": ["TextMessage", "CardMessage", "ImagePath", "AudioPath", "file_path", "ImageGivenTextPath", "DownloadGivenImagePath", "DownloadGivenImagePathWithRename", "DownloadFromUrl", "EmptyRecip", "Swap Canvas", "Test Socket Asserts", "Fetch Chat History", "Fetch Buttons", "Fancy Right Click"],
                     "placeholder": "(choose)"
                 },
                 {

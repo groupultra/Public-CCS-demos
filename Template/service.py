@@ -16,9 +16,6 @@ class TemplateService(Moobius):
 
         super().__init__(**kwargs)
 
-        with open('./config/client.json') as f: # Demo-specific config.
-            self.client_config = json.load(f)
-
         with open('resources/buttons.json', 'r') as f:
             self._default_buttons = [Button(**b) for b in json.load(f)]
         self.image_show_dict = {}
@@ -53,8 +50,8 @@ class TemplateService(Moobius):
         """Initalizes the channel (given by channel_id) with the images and real and puppet characters.
            All of this is stored in a MoobiusStorage object."""
 
-        the_channel = MoobiusStorage(self.client_id, channel_id, db_config=self.db_config)
-        self.channel_storages[channel_id] = the_channel
+        the_channel = MoobiusStorage(self.client_id, channel_id, db_config=self.config['db_config'])
+        self.channels[channel_id] = the_channel
 
         member_ids = await self.fetch_member_ids(channel_id, raise_empty_list_err=False)
 
@@ -96,9 +93,9 @@ class TemplateService(Moobius):
 
     async def get_channel(self, channel_id):
         """Prevents KeyErrors by creating new channel databases if they don't exist yet."""
-        if channel_id not in self.channel_storages:
+        if channel_id not in self.channels:
             await self.on_channel_init(channel_id)
-        return self.channel_storages[channel_id]
+        return self.channels[channel_id]
 
     async def on_start(self):
         """Called after successful connection to websocket server and service login success.
@@ -117,7 +114,7 @@ class TemplateService(Moobius):
         channel_id = message_up.channel_id
         recipients = message_up.recipients
         sender = message_up.sender
-        to_whom = await self.fetch_member_ids(channel_id, raise_empty_list_err=False) if self.client_config['show_us_all'] else [sender]
+        to_whom = await self.fetch_member_ids(channel_id, raise_empty_list_err=False)
 
         if message_up.subtype == types.TEXT:
             txt = message_up.content.text
@@ -172,7 +169,7 @@ class TemplateService(Moobius):
     async def on_refresh(self, action):
         await self.calculate_and_update_character_list_from_database(action.channel_id, action.sender)
         sender = action.sender
-        to_whom = await self.fetch_member_ids(action.channel_id, raise_empty_list_err=False) if self.client_config['show_us_all'] else [sender]
+        to_whom = await self.fetch_member_ids(action.channel_id, raise_empty_list_err=False)
         if hasattr(self, 'TMP_print_buttons') and getattr(self, 'TMP_print_buttons'): # Set to True to indicate an extra call to print the buttons.
             self.TMP_print_buttons = False
             channel_id = action.channel_id
@@ -183,7 +180,7 @@ class TemplateService(Moobius):
         channel_id = action.channel_id
         sender = action.sender
         the_channel = await self.get_channel(channel_id)
-        to_whom = await self.fetch_member_ids(channel_id, raise_empty_list_err=False) if self.client_config['show_us_all'] else [sender]
+        to_whom = await self.fetch_member_ids(channel_id, raise_empty_list_err=False)
 
         state = the_channel.states[sender]['canvas_mode']
         await self.send_canvas(self.image_show_dict[state], channel_id, to_whom)
@@ -253,7 +250,7 @@ class TemplateService(Moobius):
         who_clicked = button_click.sender
         the_channel = await self.get_channel(channel_id)
 
-        to_whom = await self.fetch_member_ids(channel_id, raise_empty_list_err=False) if self.client_config['show_us_all'] else [who_clicked]
+        to_whom = await self.fetch_member_ids(channel_id, raise_empty_list_err=False)
 
         value = None
         if button_click.arguments:

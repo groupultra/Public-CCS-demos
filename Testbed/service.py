@@ -244,6 +244,9 @@ class TestbedService(Moobius):
                         if usr in the_channel.buttons:
                             the_channel.buttons[sender] = self.default_buttons # Reset buttons etc.
                     await self.send_buttons(self.default_buttons, channel_id, to_whom)
+                elif txt1 == "user_info":
+                    user_info = await self.http_api.fetch_user_info()
+                    await self.send_message(str(user_info), channel_id, to_whom[0], to_whom)
                 elif txt1.split(' ')[0] == 'laser':
                     await self.send_message(f"NOTE: The Laser feature is not a standard SDK feature, it is specific to Demo.", channel_id, sender, to_whom)
                     if '>' not in txt1:
@@ -376,6 +379,8 @@ class TestbedService(Moobius):
                 logger.warning("Will delete account!")
                 await self.http_api.delete_account()
                 logger.warning("Deleted account!")
+            elif 'https://' in entry_message or 'http://' in entry_message:
+                await self.send_message("Entered link from a button: "+entry_message, button_click.channel_id, button_click.sender, button_click.sender, subtype=types.FILE, path=entry_message)
             else:
                 await self.send_message("Entered from a button: "+entry_message, button_click.channel_id, button_click.sender, button_click.sender)
 
@@ -444,6 +449,9 @@ class TestbedService(Moobius):
                 file_path, rm_fn = _make_image(2.0)
                 await self.send_message(pathlib.Path(file_path), channel_id, who_clicked, to_whom, subtype=types.FILE, file_display_name='Custom_display_name.png')
                 rm_fn()
+            elif value == 'DownloadFromUrl'.lower():
+                # It should fill in the size!
+                await self.send_message('https://upload.wikimedia.org/wikipedia/commons/4/43/ESO-VLT-Laser-phot-33a-07.jpg', channel_id, who_clicked, to_whom, subtype=types.FILE)
             elif value == 'EmptyRecip'.lower():
                 await self.send_message(f'Message 1/3 sent to {to_whom}', channel_id, who_clicked, to_whom)
                 await self.send_message(f'Message 2/3 sent to Empty list (you should NOT see this message!)', channel_id, who_clicked, [])

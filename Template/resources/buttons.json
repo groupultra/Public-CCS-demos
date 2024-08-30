@@ -1,35 +1,38 @@
 [
     {
         "button_id": "message_btn",
-        "button_name": "Message!",
-        "new_window": true,
-        "arguments": [
-            {
-                "name": "Select Task",
-                "type": "enum",
-                "required": true,
-                "values": ["Text", "Image"],
-                "placeholder": "(choose)"
-            }
-        ]
+        "button_text": "Message!",
+        "dialog": {
+            "title":"Message-related tests",
+            "components":[
+                {
+                    "label": "Select Task",
+                    "type": "dropdown",
+                    "required": true,
+                    "choices": ["Text", "Image"],
+                    "placeholder": "(choose)"
+                }
+            ]
+        }
     },
     {
         "button_id": "user_btn",
-        "button_name": "Characters!",
-        "new_window": true,
-        "arguments": [
-            {
-                "name": "Select task",
-                "type": "enum",
-                "required": true,
-                "values": ["Make Mickey", "Mickey Talk"],
-                "placeholder": "(choose)"
-            }
-        ]
+        "button_text": "Characters!",
+        "dialog": {
+            "title":"Character-related tests",
+            "components": [
+                {
+                    "label": "Select task",
+                    "type": "dropdown",
+                    "required": true,
+                    "choices": ["Make Mickey", "Mickey Talk"],
+                    "placeholder": "(choose)"
+                }
+            ]
+        }
     },
     {
         "button_id": "command_btn",
-        "button_name": "Commands",
-        "new_window": false
+        "button_text": "Commands"
     }
 ]

@@ -22,7 +22,7 @@ class DemoService(Moobius):
             self._default_buttons = [Button(**b) for b in json.load(f)]
         self.image_show_dict = {}
 
-        _menu = lambda name, the_id, tys: MenuItem(item_text=name, item_id=the_id, message_subtypes=tys)
+        _menu = lambda name, the_id, tys: MenuItem(menu_item_text=name, menu_item_id=the_id, message_subtypes=tys)
         menus = [_menu('Text 1', '1', [types.TEXT]), _menu('Text 2', '2', [types.TEXT]), _menu('Text 3', '3', [types.TEXT]),
                  _menu('Image 1', 'R', [types.IMAGE]), _menu('Image 2', 'G', [types.IMAGE]), _menu('Image 3', 'B', [types.IMAGE]),
                  _menu('Audio 1', 'doe', [types.AUDIO]), _menu('Audio 2', 're', [types.AUDIO]), _menu('Audio 3', 'mi', [types.AUDIO]),
@@ -63,10 +63,11 @@ class DemoService(Moobius):
     async def on_channel_init(self, channel_id):
         """Initalizes the channel (given by channel_id) with the images and real and puppet characters.
            All of this is stored in a MoobiusStorage object."""
-
-        the_channel = MoobiusStorage(self.client_id, channel_id, db_config=self.db_config)
-        self.channel_storages[channel_id] = the_channel
-
+        super().on_channel_init(channel_id)
+        if not self.config['db_config']:
+            raise Exception("No DB config!")
+        self.channels[channel_id] = MoobiusStorage(self.client_id, channel_id, self.config['db_config']) # TODO: Why is this not covered in the super() call?
+        the_channel = self.channels[channel_id]
         member_ids = await self.fetch_member_ids(channel_id, raise_empty_list_err=False)
 
         for character_id, character_profile in zip(member_ids, await self.fetch_character_profile(member_ids)):
@@ -110,9 +111,9 @@ class DemoService(Moobius):
 
     async def get_channel(self, channel_id):
         """Prevents KeyErrors by creating new channel databases if they don't exist yet."""
-        if channel_id not in self.channel_storages:
+        if channel_id not in self.channels:
             await self.on_channel_init(channel_id)
-        return self.channel_storages[channel_id]
+        return self.channels[channel_id]
 
     async def on_message_down(self, message_down):
         pass
@@ -347,8 +348,8 @@ class DemoService(Moobius):
                 for c_id in channel_ids:
                          if c_id in self.config["channels"]:
                              continue # Do not leave the core channels.
-                         if c_id in self.channel_storages:
-                             del self.channel_storages[c_id]
+                         if c_id in self.channels:
+                             del self.channels[c_id]
                          left_channels.append(c_id)
                 await self.send_message(f"Will try to leave these channels:\n{left_channels}.", channel_id, who_clicked, to_whom)
                 sucessfully_left = []
@@ -426,16 +427,16 @@ class DemoService(Moobius):
 "hide" (send to service): Hide buttons and canvas.
 "reset" (send to service): Reset mickeys and refresh buttons.
 """.strip().replace('\n','\n\n')
-            await self.send_message(f"Commands (some must be sent to all 'all' some to 'service'):\n{cmds}", channel_id, who_clicked, to_whom)
+            await self.send_message(f"Commands:\n{cmds}", channel_id, who_clicked, to_whom)
         else:
             logger.warning(f"Unknown button_id: {button_id}")
 
     async def on_menu_item_click(self, menu_click):
         """Right-click the context menu."""
-        item_id = menu_click.item_id
+        item_id = menu_click.menu_item_id
         message_content = menu_click.message_content
-        menu_dict = dict(zip([m.item_id for m in self.menu_list], self.menu_list))
-        txt = f'You choose "{menu_dict[item_id].item_text}" on message "{message_content} (this message only sent to whoever clicked)".'
+        menu_dict = dict(zip([m.menu_item_id for m in self.menu_list], self.menu_list))
+        txt = f'You choose "{menu_dict[item_id].menu_item_id}" on message "{message_content} (this message only sent to whoever clicked)".'
         await self.send_message(txt, menu_click.channel_id, menu_click.sender, menu_click.sender)
 
     async def on_spell(self, spell):
@@ -450,7 +451,7 @@ class DemoService(Moobius):
 
         text = f"WAND: {content * times}"
 
-        for channel_id in self.channel_storages.keys():
+        for channel_id in self.channels.keys():
             the_channel = await self.get_channel(channel_id)
             recipients = list(the_channel.real_characters.keys())
             talker = the_channel.puppet_characters[self.WAND].character_id

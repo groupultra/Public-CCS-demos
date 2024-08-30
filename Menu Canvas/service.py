@@ -8,9 +8,9 @@ class MenuCanvasService(Moobius):
         super().__init__(**kwargs)
 
     async def on_refresh(self, action):
-        canvas_elements = [CanvasItem(text="Some **text** here, along with an image. Try sending a message and richt-clicking on it.", path="https://www.moobius.net/images/index/indexH2.png")]
-        canvas_elements.append(CanvasItem(path="https://www.moobius.net/images/index/indexBg.png"))
-        canvas_elements.append(CanvasItem(text="More `text` here.\nWith multiple lines.\nSeperated by newlines."))
+        canvas_elements = [CanvasItem(text="Some **text** here, along with an image. Try sending a message and then right-clicking on it.", path="https://www.moobius.ai/images/index/light/t-1.jpg")]
+        canvas_elements.append(CanvasItem(path="f-1.png")) # https://www.moobius.ai/images/index/light/f-1.png
+        canvas_elements.append(CanvasItem(text="More `text` here.\nWith multiple lines.\nSeperated by *newlines*. \n ## No image."))
         await self.send_canvas(canvas_elements, action.channel_id, [action.sender])
         await self.send_style([StyleItem(widget="canvas", display="visible", expand=True)], action.channel_id, [action.sender])
 

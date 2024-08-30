@@ -7,8 +7,8 @@ __pycache__/
 */config/agent.json
 */config/service.json
 */config/config.json
-*/config/service.json
-*/config/config.json
+*/config/account.json
+*/config/usermode_service.json
 */config/usermode_account.json
 */config/usermode_config.json
 */config/usermode_db.json

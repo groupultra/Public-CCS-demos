@@ -53,7 +53,7 @@ class TestbedUser(Moobius):
                 new_name = text1.replace("rename user",'').strip()
                 the_user_id = self.client_id # Will not be needed for update_current_user in the .net version.
                 logger.info('About to update the user\'s name!')
-                await self.update_current_user(avatar="null", description='User got an updated name!', name=new_name)
+                await self.update_current_user(avatar=None, description='User got an updated name!', name=new_name)
                 text2 = "renamed the user (refresh)!"
             elif text1 == 'channel groups' or text1 == 'channel_groups':
                 glist_temp = await self.fetch_channel_temp_group(channel_id)

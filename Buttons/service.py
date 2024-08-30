@@ -29,7 +29,7 @@ class ButtonService(Moobius):
         elif which_one == 'hard':
             txt = 'Pressed a fancy button choices:'
             for a in button_click.arguments:
-                txt = txt+' '+a
+                txt = txt+' '+a.value
         elif which_one == 'bottom':
             txt = "Bottom button: "+str(button_click)
 

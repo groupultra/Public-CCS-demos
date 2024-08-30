@@ -1,4 +1,4 @@
-from moobius import Moobius
+from moobius import Moobius, MoobiusWand
 from moobius.types import Button, ButtonClick
 
 class GroupService(Moobius):
@@ -42,3 +42,7 @@ class GroupService(Moobius):
         else:
             filtered_recips = [to_whom[i] for i in list(filter(lambda i: recip_roles[i] != 'quiet', range(len(to_whom))))]
         await self.send_message(message, recipients=filtered_recips)
+
+
+if __name__ == "__main__":
+    MoobiusWand().run(GroupService, config='config/config.json')
