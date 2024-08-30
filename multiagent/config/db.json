@@ -1,0 +1,30 @@
+[{
+    "implementation": "json",
+    "name": "memory",
+    "load": true,
+    "clear": false,
+
+    "settings": {
+        "root_dir": "json_db"
+    }
+},
+{
+    "implementation": "json",
+    "name": "world",
+    "load": true,
+    "clear": false,
+
+    "settings": {
+        "root_dir": "json_db"
+    }
+},
+{
+    "implementation": "json",
+    "name": "reAct_mode",
+    "load": true,
+    "clear": false,
+
+    "settings": {
+        "root_dir": "json_db"
+    }
+}]
