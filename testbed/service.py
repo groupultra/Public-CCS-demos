@@ -384,39 +384,6 @@ class TestbedService(Moobius):
             else:
                 await self.send_message("Entered from a button: "+entry_message, button_click.channel_id, button_click.sender, button_click.sender)
 
-        def _make_image(vignette=0.0):
-            """Generates a "random" image and returns the local file_path (as a string) as well as a removal function (if the image is dynamic)."""
-            dyn_mode = False
-            try:
-                from PIL import Image
-                import numpy as np
-                dyn_mode = True
-            except Exception as e:
-                logger.info('no PIL detected, will not be able to dynamically generate an image.')
-                pass
-            if dyn_mode:
-                P = 128
-                arr = np.zeros([P, P, 4])
-                N = 16
-                freq = np.random.random([N, 4])*np.transpose(np.tile(np.arange(N), [4, 1]))
-                ampli = np.random.random([N, 4])/(1.0+freq**1.5)
-                phase = np.random.random([N, 4])*6.28
-                X, Y = np.meshgrid(np.arange(P), np.arange(P))
-                for rgba in range(4):
-                    for i in range(N):
-                        theta = 6.28*np.random.random()
-                        arr[:,:,rgba] += np.cos((X*np.cos(theta)+Y*np.sin(theta))*freq[i,rgba]+phase[i,rgba])*ampli[i,rgba]
-                    arr[:,:,rgba] = arr[:,:,rgba]*(1.0-vignette+vignette*(1-16*(X-0.5*P)*(X-0.5*P)*(Y-0.5*P)*(Y-0.5*P)/P/P/P/P))
-                arr = arr-np.min(arr)
-                arr = arr/np.max(arr)
-                im = Image.fromarray((arr*255+0.5).astype('uint8'), 'RGBA')
-                file_path = './resources/autogen_image.png'
-                im.save(file_path)
-                rm_fn = lambda: os.remove(file_path)
-            else:
-                file_path = './resources/mickey.jpg'
-                rm_fn = lambda: False
-            return file_path, rm_fn
         if button_id == "message_btn".lower():
             if value == 'TextMessage'.lower():
                 import random
@@ -427,7 +394,7 @@ class TestbedService(Moobius):
                                 'text':'Domain names? Urls? wwwdotcoms?'}
                 await self.send_message(card_message, channel_id, who_clicked, to_whom, subtype=types.CARD)
             elif value == 'ImagePath'.lower():
-                file_path, rm_fn = _make_image(0.0)
+                file_path, rm_fn = make_local_image(0.0)
                 path_obj = pathlib.Path(file_path) # Conversion to a Path makes the Moobius class recognize it as an image.
                 message = await self.send_message(path_obj, channel_id, who_clicked, to_whom)
                 rm_fn()
@@ -437,16 +404,16 @@ class TestbedService(Moobius):
             elif value == 'file_path'.lower():
                 await self.send_message(pathlib.Path('./resources/tiny.pdf'), channel_id, who_clicked, to_whom)
             elif value == 'ImageGivenTextPath'.lower(): # Override subtype to not send a boring text message.
-                file_path, rm_fn = _make_image(-1.0)
+                file_path, rm_fn = make_local_image(-1.0)
                 message = await self.send_message(file_path, channel_id, who_clicked, to_whom, subtype=types.IMAGE)
                 rm_fn()
                 await self.send_message(f'Image path in bucket: {message["body"]["content"]["path"]}', channel_id, who_clicked, to_whom)
             elif value == 'DownloadGivenImagePath'.lower():
-                file_path, rm_fn = _make_image(1.0)
+                file_path, rm_fn = make_local_image(1.0)
                 await self.send_message(pathlib.Path(file_path), channel_id, who_clicked, to_whom, subtype=types.FILE)
                 rm_fn()
             elif value == 'DownloadGivenImagePathWithRename'.lower(): # Show the filename as different from it's actual name.
-                file_path, rm_fn = _make_image(2.0)
+                file_path, rm_fn = make_local_image(2.0)
                 await self.send_message(pathlib.Path(file_path), channel_id, who_clicked, to_whom, subtype=types.FILE, file_display_name='Custom_display_name.png')
                 rm_fn()
             elif value == 'DownloadFromUrl'.lower():
@@ -697,7 +664,7 @@ class TestbedService(Moobius):
 "API": Print one API command per unique socket API call received.
 "log user out": Log out user, will re-auth next session (the user may log in again immediatly!).
 "user info": See printout of user info.
-"rename user foo": Set user name to foo (need to refresh).
+"rename user foo": Set user name to foo (need to refresh), and randomize the image.
 "channel_groups": Have the user print channel groups. The user is auth'ed with a different servic_id than the Service.
 "show_updates": Have the user print the most recent update of each kind of update it recieved.
 "user_info": Have the user print thier own user info.
@@ -757,3 +724,38 @@ class TestbedService(Moobius):
             character_list.append(the_channel.puppet_characters[key].character_id)
 
         await self.send_characters(character_list, channel_id, [character_id])
+
+
+def make_local_image(vignette=0.0):
+    """Generates a "random" image and returns the local file_path (as a string) as well as a removal function (if the image is dynamic)."""
+    dyn_mode = False
+    try:
+        from PIL import Image
+        import numpy as np
+        dyn_mode = True
+    except Exception as e:
+        logger.info('no PIL detected, will not be able to dynamically generate an image.')
+        pass
+    if dyn_mode:
+        P = 128
+        arr = np.zeros([P, P, 4])
+        N = 16
+        freq = np.random.random([N, 4])*np.transpose(np.tile(np.arange(N), [4, 1]))
+        ampli = np.random.random([N, 4])/(1.0+freq**1.5)
+        phase = np.random.random([N, 4])*6.28
+        X, Y = np.meshgrid(np.arange(P), np.arange(P))
+        for rgba in range(4):
+            for i in range(N):
+                theta = 6.28*np.random.random()
+                arr[:,:,rgba] += np.cos((X*np.cos(theta)+Y*np.sin(theta))*freq[i,rgba]+phase[i,rgba])*ampli[i,rgba]
+            arr[:,:,rgba] = arr[:,:,rgba]*(1.0-vignette+vignette*(1-16*(X-0.5*P)*(X-0.5*P)*(Y-0.5*P)*(Y-0.5*P)/P/P/P/P))
+        arr = arr-np.min(arr)
+        arr = arr/np.max(arr)
+        im = Image.fromarray((arr*255+0.5).astype('uint8'), 'RGBA')
+        file_path = './resources/autogen_image.png'
+        im.save(file_path)
+        rm_fn = lambda: os.remove(file_path)
+    else:
+        file_path = './resources/mickey.jpg'
+        rm_fn = lambda: False
+    return file_path, rm_fn
