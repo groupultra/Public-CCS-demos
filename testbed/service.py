@@ -587,6 +587,13 @@ class TestbedService(Moobius):
                 real_ids = await self.fetch_member_ids(channel_id, raise_empty_list_err=False)
                 await self.send_message(f'Member ids: {real_ids}', channel_id, to_whom, who_clicked)
                 await self.send_message(f'Member profiles: {await self.fetch_character_profile(real_ids)}', channel_id, who_clicked, to_whom)
+            elif value == 'https_refresh'.lower():
+                await self.send_message(f'Refresh token (this never changes):'+str(self.http_api.refresh_token), channel_id, who_clicked, to_whom)
+                await self.send_message(f'Old access token:'+str(self.http_api.access_token), channel_id, who_clicked, to_whom)
+                result = await self.http_api.refresh()
+                if result != self.http_api.access_token:
+                    await self.send_message(f'SDK error likely: Did not update the access token to the refresh result.', channel_id, who_clicked, to_whom)
+                await self.send_message(f'New access token:'+str(self.http_api.access_token), channel_id, who_clicked, to_whom)
             else:
                 raise Exception(f'Strange value for button user_btn: {value}')
         elif button_id == "group_btn".lower():

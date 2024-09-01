@@ -47,7 +47,7 @@
                     "label": "Select task",
                     "type": "dropdown",
                     "required": true,
-                    "choices": ["Make Mickey", "Mickey Talk", "update mickey (not user) name", "List Characters"],
+                    "choices": ["Make Mickey", "Mickey Talk", "update mickey (not user) name", "List Characters", "https_refresh"],
                     "placeholder": "(choose)"
                 }
             ]
