@@ -4,11 +4,35 @@ import copy
 from datetime import datetime
 
 from loguru import logger
-from moobius import Moobius, MoobiusStorage
+from moobius import Moobius, MoobiusStorage, json_utils
 from moobius.database.storage import CachedDict
 import moobius.types as types
 from moobius.types import Button, CanvasItem, StyleItem, MenuItem, MessageBody, InputComponent, Dialog
 
+
+this_folder = os.path.dirname(__file__)
+tmp_file = this_folder + '/logs/reportsservice.json'
+
+
+def clear_tmp_file():
+    """Clears the tmp testing file. Called once at the beginning."""
+    if os.path.exists(tmp_file):
+        os.remove(tmp_file)
+    with open(tmp_file,'w', encoding='utf-8') as f:
+        json.dump([], f)
+
+
+def save_to_tmp_file(x):
+    """Saves (usally a test) to a temp file for automatic testing."""
+    with open(tmp_file,'r', encoding='utf-8') as f:
+        the_list = json.load(f)
+    print(f"SAVING to service file. Current number of stored entries: {len(the_list)}")
+    the_list.append(x)
+    with open(tmp_file,'w', encoding='utf-8') as f:
+        json_utils.enhanced_json_save(f, the_list)
+
+
+import random; random1 = str(random.random())
 example_socket_callback_payloads = {} # Print these out when the AI is done.
 
 @dataclasses.dataclass
@@ -22,7 +46,7 @@ class EzData:
 
 class TestbedService(Moobius):
     def __init__(self, **kwargs):
-
+        clear_tmp_file()
         with open('./config/client.json') as f: # Demo-specific config.
             self.client_config = json.load(f)
             is_windows = (sys.platform.lower() in ['win', 'win32', 'win64', 'windows', 'windoze'])
@@ -174,22 +198,13 @@ class TestbedService(Moobius):
             txt = f"Check in every minute! {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
             await self.send_message(c_id, txt, talker, recipients)
 
-    async def on_message_down(self, message_down):
-        """This and several other callbacks only exist to record the API calls."""
-        example_socket_callback_payloads['on_message_down'] = message_down
-
-    async def on_update(self, the_update):
-        """This and several other callbacks only exist to record the API calls."""
-        example_socket_callback_payloads['on_update'] = the_update
-
     async def on_message_up(self, message_up):
         """Runs various commands, such as resetting when the user types in "reset".
            (user-related commands are found in the user.py instead of here)."""
-        if not isinstance(message_up, MessageBody): # DEBUG testing.
-            print('Unrecognized message up:', message_up)
-            raise Exception(f'message_up is a {type(message_up)}, not a {MessageBody} see above.')
         channel_id = message_up.channel_id
         recipients = message_up.recipients
+        if recipients == ['service']:
+            recipients = None # Confusion of non vs service.
         sender = message_up.sender
         to_whom = await self.fetch_member_ids(channel_id, raise_empty_list_err=False) if self.client_config['show_us_all'] else [sender]
 
@@ -201,8 +216,9 @@ class TestbedService(Moobius):
                 raise Exception(f'Sender must be a string, instead it is: {sender}')
             if sender not in list(the_channel.real_characters.keys()):
                 await self.add_real_character(channel_id, sender, intro="oops looks like (bug) did not add this character on startup.")
-
             if recipients: # DEMO: text modification
+                if txt1.lower() == 'reset':
+                    save_to_tmp_file(f"Reset as message text, but had recipients ({recipients}) (was not sent to service instead) so reset will not happen.")
                 if txt1.lower() == "moobius":
                     await self.send_message("Moobius is Great!", channel_id, sender, recipients)
                 elif txt1.lower() == "api":
@@ -212,7 +228,7 @@ class TestbedService(Moobius):
                     txt2 = '\n\n'.join(lines)
                     await self.send_message('Socket api call examples recorded:\n'+txt2, channel_id, sender, recipients)
                 else:
-                    await self.send_message(txt, channel_id, sender, recipients)
+                    await self.send_message(message_up) # Just send the unmodified message.
             else: # DEMO: commands to Service(Infinity)
                 if txt1 == "hide":
                     for usr in to_whom:
@@ -229,23 +245,27 @@ class TestbedService(Moobius):
                 elif txt1 == "reset":
                     for sn in range(self.MICKEY_LIMIT):
                         the_character_id = the_channel.puppet_characters[f"{self.MICKEY}_{sn}"]
-                        if sn>1:
-                            the_character_id = the_character_id.character_id # Should work with both IDs and the Character objects.
+                        if sn>1: # Jinx test: The update_agent will be tested with both IDs and the Character objects.
+                            the_character_id = the_character_id.character_id
                         await self.update_agent(character=the_character_id, avatar=self.image_paths[self.MICKEY], description='Mickey reset!', name=f'Mickey {sn}')
 
+                    reset_users = []
                     for usr in to_whom:
                         if usr in the_channel.states:
+                            reset_users.append(usr)
                             the_channel.states[usr]['mickey_num'] = 0
                             the_channel.states.save(usr)
 
                     await self.calculate_and_update_character_list_from_database(channel_id, sender)
-                    the_channel = await self.get_channel(channel_id) # TODO: why call this twice?
                     for usr in to_whom:
                         if usr in the_channel.buttons:
                             the_channel.buttons[sender] = self.default_buttons # Reset buttons etc.
                     await self.send_buttons(self.default_buttons, channel_id, to_whom)
+                    logger.info("Reset:"+ str(reset_users)+ " out of: "+str(to_whom))
+                    save_to_tmp_file("Reset:"+ str(reset_users)+ " out of: "+str(to_whom))
+                    await self.send_message(f"Users asking for reset: {reset_users}; users who had data to reset: {to_whom}.", channel_id, sender, to_whom)
                 elif txt1 == "user_info":
-                    user_info = await self.http_api.fetch_user_info()
+                    user_info = await self.http_api.fetch_user_info(include_sub=True)
                     await self.send_message(str(user_info), channel_id, to_whom[0], to_whom)
                 elif txt1.split(' ')[0] == 'laser':
                     await self.send_message(f"NOTE: The Laser feature is not a standard SDK feature, it is specific to Demo.", channel_id, sender, to_whom)
@@ -354,7 +374,7 @@ class TestbedService(Moobius):
     async def on_button_click(self, button_click):
         """Called when the user presses a button (and selecting an option of a list appears). button_click is a ButtonClick object.
            This is a major switchyard which handles most of the different buttons in the demo."""
-        print("Button click:", button_click)
+        print("Button click received from a user or usermode service:", button_click)
         example_socket_callback_payloads['on_button_click'] = button_click
         channel_id = button_click.channel_id
         button_id = button_click.button_id.lower()
@@ -366,7 +386,6 @@ class TestbedService(Moobius):
         redis_txt = 'not-the-Redis' if self.client_config['avoid_redis'] else 'Redis'
         value = None
         entry_message = None # A silly enter message in button component box, and then send it as a message.
-        print("Button click:", button_click)
         if button_click.arguments:
 
             value0 = button_click.arguments[0].value
@@ -382,7 +401,7 @@ class TestbedService(Moobius):
             elif 'https://' in entry_message or 'http://' in entry_message:
                 await self.send_message("Entered link from a button: "+entry_message, button_click.channel_id, button_click.sender, button_click.sender, subtype=types.FILE, path=entry_message)
             else:
-                await self.send_message("Entered from a button: "+entry_message, button_click.channel_id, button_click.sender, button_click.sender)
+                await self.send_message("Entered from a button: "+entry_message+'_one-time-rand: '+str(random1), button_click.channel_id, button_click.sender, button_click.sender)
 
         if button_id == "message_btn".lower():
             if value == 'TextMessage'.lower():
@@ -423,6 +442,8 @@ class TestbedService(Moobius):
                 await self.send_message(f'Message 1/3 sent to {to_whom}', channel_id, who_clicked, to_whom)
                 await self.send_message(f'Message 2/3 sent to Empty list (you should NOT see this message!)', channel_id, who_clicked, [])
                 await self.send_message(f'Message 3/3 sent to {to_whom}. You should NOT see message 2/3', channel_id, who_clicked, to_whom)
+            elif value == 'ExtraRecip'.lower():
+                await self.send_message(f'This message sent to an extra non-existent character.', channel_id, who_clicked, to_whom+['non_exist_id'])
             elif value == 'Swap Canvas'.lower():
                 if the_channel.states[who_clicked]['canvas_mode'] == self.LIGHT: 
                     the_channel.states[who_clicked]['canvas_mode'] = self.DARK
@@ -436,17 +457,6 @@ class TestbedService(Moobius):
 
                 image_uri = self.image_paths[state] # Shows using an online image.
                 await self.send_message(image_uri, channel_id, who_clicked, to_whom, subtype=types.IMAGE)
-            elif value == 'Test Socket Asserts'.lower():
-                # Tests JSON datastructures which are almost correct. Can assert catch the error? TODO: add more.
-                bad_subtype = 'not a valid subtype'
-                bad_message_body = {'channel_id':channel_id, 'recipients':to_whom, 'subtype':bad_subtype, 'message_content':{'text':'ok'}}
-                bad_message = {'type':types.MESSAGE_DOWN,'request_id':'some_id', 'service_id':self.client_id, 'body': bad_message_body}
-                try:
-                    await self.ws_client.send(bad_message)
-                    await self.send_message('No assert error raised for bad subtype message.', channel_id, who_clicked, to_whom)
-                except Exception as e:
-                    await self.send_message(f'Assert error raised for bad message subtype:\n{e}', channel_id, who_clicked, to_whom)
-                #await self.ws_client.send(bad_message) # uncomment to raise an Exception in the terminal.
             elif value == "Fetch Chat History".lower():
                 await self.send_message(f"Fetching chat history (Warning: this feature is likely broken).", channel_id, who_clicked, to_whom)
                 history = await self.fetch_message_history(channel_id, limit=6, before="null")
@@ -547,6 +557,9 @@ class TestbedService(Moobius):
                 await self.send_message(f"Downloaded an image file to {os.path.realpath(local_path)} reported as {local_path1}.", channel_id, who_clicked, to_whom)
                 the_bytes = await self.download(logo_url, file_path=None) # None filename means just make bytes.
                 await self.send_message(f"Direct download to bytes (not to a file): "+str(the_bytes), channel_id, who_clicked, to_whom, len_limit=1024)
+            elif value == "Channel Service ID".lower():
+                service_id = await self.http_api.fetch_channel_service_id(channel_id)
+                await self.send_message(f"Service id of current channel: "+service_id, channel_id, who_clicked, to_whom)
             else:
                 raise Exception(f'Strange value for button channel_btn: {value}')
         elif button_id == "user_btn".lower():
@@ -562,8 +575,7 @@ class TestbedService(Moobius):
                 else:
                     the_channel.states[who_clicked]['mickey_num'] += 1
                     the_channel.states.save(who_clicked)
-
-                    await self.calculate_and_update_character_list_from_database(channel_id, who_clicked)
+                await self.calculate_and_update_character_list_from_database(channel_id, who_clicked) # Still update chars if limit is reached, just don't increment mickey num.
             elif value == 'Mickey Talk'.lower():
                 if the_channel.states[who_clicked]['mickey_num'] == 0:
                     await self.send_message("Please Create Mickey First!", channel_id, who_clicked, to_whom)
@@ -587,13 +599,19 @@ class TestbedService(Moobius):
                 real_ids = await self.fetch_member_ids(channel_id, raise_empty_list_err=False)
                 await self.send_message(f'Member ids: {real_ids}', channel_id, to_whom, who_clicked)
                 await self.send_message(f'Member profiles: {await self.fetch_character_profile(real_ids)}', channel_id, who_clicked, to_whom)
-            elif value == 'https_refresh'.lower():
+            elif value == 'Https Refresh'.lower():
                 await self.send_message(f'Refresh token (this never changes):'+str(self.http_api.refresh_token), channel_id, who_clicked, to_whom)
                 await self.send_message(f'Old access token:'+str(self.http_api.access_token), channel_id, who_clicked, to_whom)
                 result = await self.http_api.refresh()
                 if result != self.http_api.access_token:
                     await self.send_message(f'SDK error likely: Did not update the access token to the refresh result.', channel_id, who_clicked, to_whom)
                 await self.send_message(f'New access token:'+str(self.http_api.access_token), channel_id, who_clicked, to_whom)
+            elif value == "Service ids".lower():
+                service_ids = await self.http_api.fetch_user_owned_services()
+                await self.send_message(f"Service ids owned by the current user: "+service_ids, channel_id, who_clicked, to_whom)
+            elif value == "Channel ids".lower():
+                service_ids = await self.http_api.fetch_user_owned_channels()
+                await self.send_message(f"Channel ids owned by the current user: "+service_ids, channel_id, who_clicked, to_whom)
             else:
                 raise Exception(f'Strange value for button user_btn: {value}')
         elif button_id == "group_btn".lower():
@@ -670,11 +688,13 @@ class TestbedService(Moobius):
 "meow": Have the other user print nya.
 "API": Print one API command per unique socket API call received.
 "log user out": Log out user, will re-auth next session (the user may log in again immediatly!).
-"user info": See printout of user info.
+"user info": See a printout of user info.
 "rename user foo": Set user name to foo (need to refresh), and randomize the image.
-"channel_groups": Have the user print channel groups. The user is auth'ed with a different servic_id than the Service.
-"show_updates": Have the user print the most recent update of each kind of update it recieved.
-"user_info": Have the user print thier own user info.
+"channel groups": Have the user print channel groups. The user is auth'ed with a different servic_id than the Service.
+"show updates": Have the user print the most recent update of each kind of update it received.
+"mark read": Mark all recently received messages as read. New messages will still be unread.
+"mark unread": Mark all recently received messages as unread.
+"show readers": Show which recently received messages are marked as read.
 "show" (send to service): Show buttons and canvas.
 "hide" (send to service): Hide buttons and canvas.
 "reset" (send to service): Reset mickeys and refresh buttons.
@@ -682,7 +702,7 @@ class TestbedService(Moobius):
 """.strip().replace('\n','\n\n')
             await self.send_message(f"Commands (some must be sent to all 'all' some to 'service'):\n{cmds}", channel_id, who_clicked, to_whom)
         else:
-            logger.warning(f"Unknown button_id: {button_id}")
+            raise Exception(f"Unknown button_id: {button_id}")
 
     async def on_menu_item_click(self, menu_click:types.MenuItemClick):
         """Right-click the context menu."""
@@ -729,7 +749,7 @@ class TestbedService(Moobius):
         for sn in range(mickey_num):
             key = f"{self.MICKEY}_{sn}"
             character_list.append(the_channel.puppet_characters[key].character_id)
-
+        save_to_tmp_file("Character list sent:"+str(character_list)+' To users:'+str(character_id))
         await self.send_characters(character_list, channel_id, [character_id])
 
 

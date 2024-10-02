@@ -1,0 +1,9 @@
+{
+  "http_server_uri": "https://api.moobius.ai/",
+  "ws_server_uri": "wss://ws.moobius.ai/",
+  "service_id": "33af8351-b304-40f9-ab95-adfb50c30f69",
+  "channels": [
+    "ccc69a84-b295-42d0-9951-96be90abeed6"
+  ],
+  "others": "include"
+}

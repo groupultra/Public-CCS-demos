@@ -9,7 +9,7 @@
                     "label": "Select The Task",
                     "type": "dropdown",
                     "required": false,
-                    "choices": ["TextMessage", "CardMessage", "ImagePath", "AudioPath", "file_path", "ImageGivenTextPath", "DownloadGivenImagePath", "DownloadGivenImagePathWithRename", "DownloadFromUrl", "EmptyRecip", "Swap Canvas", "Test Socket Asserts", "Fetch Chat History", "Fetch Buttons", "Fancy Right Click"],
+                    "choices": ["TextMessage", "CardMessage", "ImagePath", "AudioPath", "file_path", "ImageGivenTextPath", "DownloadGivenImagePath", "DownloadGivenImagePathWithRename", "DownloadFromUrl", "EmptyRecip", "ExtraRecip", "Swap Canvas", "Fetch Chat History", "Fetch Buttons", "Fancy Right Click"],
                     "placeholder": "(choose)"
                 },
                 {
@@ -31,7 +31,7 @@
                     "label": "Select Task",
                     "type": "dropdown",
                     "required": true,
-                    "choices": ["New Channel", "Ping Channels", "Leave Extra Channels", "List Bound Channels", "Fetch Channel List", "Update Extra Channels", "SDK direct download"],
+                    "choices": ["New Channel", "Ping Channels", "Leave Extra Channels", "List Bound Channels", "Fetch Channel List", "Update Extra Channels", "SDK direct download", "Channel Service ID"],
                     "placeholder": "(choose)"
                 }
             ]
@@ -41,13 +41,13 @@
         "button_id": "user_btn",
         "button_text": "Characters!",
         "dialog": {
-            "title":"Message-related tests",
+            "title":"Character-related tests",
             "components":[
                 {
                     "label": "Select task",
                     "type": "dropdown",
                     "required": true,
-                    "choices": ["Make Mickey", "Mickey Talk", "update mickey (not user) name", "List Characters", "https_refresh"],
+                    "choices": ["Make Mickey", "Mickey Talk", "update mickey (not user) name", "List Characters", "Https Refresh", "Service ids", "Channel ids"],
                     "placeholder": "(choose)"
                 }
             ]
@@ -57,7 +57,7 @@
         "button_id": "group_btn",
         "button_text": "Groups!",
         "dialog": {
-                "title":"Message-related tests",
+                "title":"Group-related tests",
                 "components":[
                 {
                     "label": "Select Group Operation",

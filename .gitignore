@@ -22,6 +22,8 @@ __pycache__/
 */config/userD/*.json
 */config/userE/*.json
 */config/userF/*.json
+*/config/mouseless/*.json
+*/config/link/*.json
 */temp/
 Multiagent/debug/*
 

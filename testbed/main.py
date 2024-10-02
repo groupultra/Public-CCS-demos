@@ -13,10 +13,26 @@ from loguru import logger
 include_user = True # usermode.
 do_simple_spells = False
 test_json_encode = False
-config_mode = 'O' # ['A', 'B', or 'C', 'O'] test different modes. A = standard. B = all mashed up. C = individual files specified. O = 'A' but moobius.ai instead.
+#FQDN = 'moobius.ai'
+#FQDN = 'mouselessmoobius.com'
+#config_mode = '.link' # Moobius.link
+
+
+def maybe_add_error(fname, add_error=False):
+    """If add_error is True, will load it and make the service id incorrect. How will the Platform respond to this?"""
+    TODO
 
 
 if __name__ == "__main__":
+    if len(sys.argv) <= 1:
+        raise Exception("Must specify FQDN. Note: The production FQDN is moobius.ai")
+    FQDN = sys.argv[1]
+    bad_config = False # Allows testing errors in the config.
+    if len(sys.argv)>2 and sys.argv[2] == 'bad_config':
+        bad_config = True
+    if bad_config:
+        TODO_bad_config_tests
+
     if test_json_encode:
         import json, dataclasses
         from moobius import types
@@ -34,20 +50,24 @@ if __name__ == "__main__":
 
     wand = MoobiusWand()
 
-    if config_mode == 'A':
-        handle = wand.run(TestbedService, config='config/serviceAC/config.json', background=True)
-    elif config_mode == 'B':
-        handle = wand.run(TestbedService, config='config/serviceB/config.json', background=True)
-    elif config_mode == 'C':
-        handle = wand.run(TestbedService, db_config='config/serviceAC/db.json', service_config='config/serviceAC/service.json', account_config='config/serviceAC/account.json', log_config='config/serviceAC/log.json', background=True)
-    elif config_mode == 'O':
+    if FQDN == 'mouselessmoobius.com':
+        handle = wand.run(TestbedService, db_config='config/db.json', service_config='config/mouseless/service.json', account_config='config/mouseless/account.json', log_config='config/log.json', background=True)
+    elif FQDN == 'moobius.ai':
         handle = wand.run(TestbedService, db_config='config/db.json', service_config='config/service.json', account_config='config/account.json', log_config='config/log.json', background=True)
+    elif FQDN == 'moobius.ai.proton':
+        handle = wand.run(TestbedService, db_config='config/db.json', service_config='config/aiproton/service.json', account_config='config/aiproton/account.json', log_config='config/log.json', background=True)
+    elif FQDN == 'moobius.link':
+        handle = wand.run(TestbedService, db_config='config/db.json', service_config='config/link/service.json', account_config='config/link/account.json', log_config='config/log.json', background=True)
+    else:
+        raise Exception("Unknown FQDN:", FQDN)
 
     if include_user:
-        if config_mode == 'O':
+        if FQDN == 'moobius.ai':
             handle = wand.run(TestbedUser, service_config='config/usermode_service.json', account_config='config/usermode_account.json', log_config='config/usermode_log.json', background=True)
-        else:
-            TODO
+        elif FQDN == 'mouselessmoobius.com':
+            handle = wand.run(TestbedUser, service_config='config/mouseless/usermode_service.json', account_config='config/mouseless/usermode_account.json', log_config='config/usermode_log.json', background=True)
+        elif FQDN == 'moobius.link':
+            handle = wand.run(TestbedUser, service_config='config/link/usermode_service.json', account_config='config/link/usermode_account.json', log_config='config/usermode_log.json', background=True)
     else:
         user_handle = None
         logger.warning('Agent has been DISABLED this run (debugging).')
@@ -77,8 +97,8 @@ if __name__ == "__main__":
             wand.spell(user_handle, "send_fetch_channel_info")
             wand.spell(user_handle, "send_button_click_key1")
             wand.spell(user_handle, "send_button_click_key2")
-            wand.spell(user_handle, "send_leave_channel")
-            wand.spell(user_handle, "send_join_channel")
+            wand.spell(user_handle, "send_leave")
+            wand.spell(user_handle, "send_join")
 
         logger.info('Test finished. If you see this, it means the service is still running.')
     else:
