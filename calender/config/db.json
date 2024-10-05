@@ -1,6 +1,6 @@
 [{
     "implementation": "json",
-    "name": "world_dict",
+    "name": "user_nylas_keys",
     "load": true,
     "clear": false,
 
@@ -10,7 +10,7 @@
 },
 {
     "implementation": "json",
-    "name": "reAct_mode",
+    "name": "recent_messages",
     "load": true,
     "clear": false,
 
@@ -20,7 +20,7 @@
 },
 {
     "implementation": "json",
-    "name": "real_user_locations",
+    "name": "timezones",
     "load": true,
     "clear": false,
 
