@@ -52,11 +52,11 @@ async def gpt_get_answer(messages, temperature=0.5, model="gpt-4o-mini", respons
     """
     _init_ai_once()
 
-    kwargs = dict(model=model, temperature=temperature, messages=messages)
-    if response_format:
-        kwargs['response_format'] = response_format
     try:
-        completion = await _openai_client.chat.completions.create(model=model, temperature=temperature, messages=messages)
+        if response_format: # The beta parse feature allows more of a Pythonic interaction.
+            completion = await _openai_client.beta.chat.completions.parse(model=model, temperature=temperature, messages=messages, response_format=response_format)
+        else:
+            completion = await _openai_client.chat.completions.create(model=model, temperature=temperature, messages=messages)
         return completion.choices[0].message.content
     except Exception as e:
         logger.error(e)
@@ -75,24 +75,30 @@ class Places(BaseModel):
     places: list[Place]
 
 
-async def gpt_make_people(description, temperature=0.5, model="gpt-4o-mini", num=8):
+async def gpt_make_people(description, temperature=0.5, model="gpt-4o-mini", num_default=8):
     """Makes people. Returns a dict from name to personality."""
-    prompt = f"""You are generating {num} persons, each with a name and personality. Please use the following description to generate your list."""
+    prompt = f"""You are generating a list of persons, each with a name and personality. Please generate {num_default} persons unless otherwise specified. Please use the following description to generate your list."""
     messages=[{"role": "system", "content": prompt},
-                {"role": "user", "content": description}]
-    persons = gpt_get_answer(messages, temperature=temperature, model=model, response_format=Persons)
+              {"role": "user", "content": description}]
+    persons = await gpt_get_answer(messages, temperature=temperature, model=model, response_format=Persons)
+    if type(persons) is str:
+        persons = json.loads(persons)
+    persons = persons['persons']
     out = {}
     for p in persons:
         out[p['name']] = p['personality']
     return out
 
 
-async def gpt_make_places(description, temperature=0.5, model="gpt-4o-mini", num=8):
+async def gpt_make_places(description, temperature=0.5, model="gpt-4o-mini", num_default=8):
     """Makes people. Returns a dict from name to personality."""
-    prompt = f"""You are generating {num} places, each with a place name and description. Please use the following description to generate your list."""
+    prompt = f"""You are generating a list places, each with a place name and description. Please generate {num_default} places unless otherwise specified. Please use the following description to generate your list."""
     messages=[{"role": "system", "content": prompt},
                 {"role": "user", "content": description}]
-    places = gpt_get_answer(messages, temperature=temperature, model=model, response_format=Places)
+    places = await gpt_get_answer(messages, temperature=temperature, model=model, response_format=Places)
+    if type(places) is str:
+        places = json.loads(places)
+    places = places['places']
     out = {}
     for p in places:
         out[p['name']] = p['description']

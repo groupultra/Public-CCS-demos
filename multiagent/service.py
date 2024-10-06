@@ -11,6 +11,15 @@ import worldbuilder, gpt, avatar_maker
 
 #####################################################################################################################
 
+async def chunked_gather(tasks, n=4):
+    """Limit how many at once. Fights against "service unavilable" errors."""
+    out = []
+    while tasks:
+        n0 = min(n, len(tasks))
+        out.extend(await asyncio.gather(*tasks[0:n0]))
+        tasks = tasks[n0:]
+    return out
+
 
 class NPCService(Moobius):
     def __init__(self, **kwargs):
@@ -40,14 +49,14 @@ class NPCService(Moobius):
         for name in world.people.keys():
             if name not in self.npcs:
                 new_char_tasks.append(upload1(name=name))
-        await asyncio.gather(*new_char_tasks)
+        await chunked_gather(new_char_tasks)
 
         rename_tasks = []
         for name in world.people.keys():
             loc = world.people_where.get(name, 'unknown')
             char = self.npcs[name]
             rename_tasks.append(self.update_agent(char.character_id, char.avatar, 'Agent', name + f' [{loc}]'))
-        await asyncio.gather(*rename_tasks)
+        await chunked_gather(rename_tasks)
 
         ## Step two: Update what the users can see. Note: Users can see characters not in thier location.
         if not who:
@@ -71,10 +80,10 @@ class NPCService(Moobius):
         travel_component = InputComponent(label="Places", type=types.DROPDOWN, required=True, choices=places, placeholder="plaza")
         travel_button_dia = Dialog(title='Choose destination!', components=[travel_component])
         buttons = [Button(button_id='startpause', button_text='Pause ' if going else 'Start '+'AI convo!'),
-                   Button(button_id='step', button_text='Take one AI step'),
-                   Button(button_id='list_memories', button_text='Show current memories'),
+                   Button(button_id='step', button_text='One AI step'),
+                   Button(button_id='list_memories', button_text='Show memories'),
                    Button(button_id='clear_memories', button_text='Delete memories'),
-                   Button(button_id='change_world', button_text='Edit world commands'),
+                   Button(button_id='change_world', button_text='Edit World'),
                    Button(button_id='toggle_ReAct', button_text='Disable ReAct' if rea else 'Enable ReAct'),
                    Button(button_id='travel', button_text=f'Travel (at {player_is_here})', dialog=travel_button_dia)]
         await self.send_buttons(buttons, channel_id, [user_id])
@@ -89,15 +98,16 @@ class NPCService(Moobius):
 
     async def update_to_world(self, channel_id, world):
         """Sets the world of a channel id, updating locations etc. Can be used to reset everything, etc."""
+        world.compat()
         for ky, v in world.to_dict().items(): # Key by key, so that it saves the CachedDict object properly.
             self.channel_stores[channel_id].world_dict[ky] = v
         who_to_update_to = await self.fetch_member_ids(channel_id, False)
-        user_updates = [self._update_buttons(channel_id, who) for who in who_to_update_to]
-        await asyncio.gather(*([self._update_char_list(channel_id, who_to_update_to)]+user_updates))
+        await chunked_gather([self._update_buttons(channel_id, who) for who in who_to_update_to])
+        await self._update_char_list(channel_id, who_to_update_to)
 
     async def on_channel_init(self, channel_id):
         if not self.imp:
-            self.imp = await self.create_agent(name='imp')
+            self.imp = await self.create_agent(name='Imp')
         self.channel_stores[channel_id] = MoobiusStorage(self.client_id, channel_id, self.config['db_config'])
         self.convo_active[channel_id] = False
         await self.update_to_world(channel_id, self.get_world(channel_id))
@@ -182,7 +192,7 @@ class NPCService(Moobius):
             await self.send_message(f'ReAct mode (https://arxiv.org/pdf/2210.03629) set to {rea}', button_click.channel_id, button_click.sender, [button_click.sender])
         elif button_click.button_id == 'change_world':
             msg = '''
-Send these commands to the Imp to change the world.
+Send the following commands **to the Imp (and only the Imp)** to change the world:
 
 People ...: Type in a JSON dict from name to personality descrption. Or leave empty to print the current personalities.
 
@@ -192,24 +202,29 @@ Prompt-people ...: Tell the AI, in natural language, to generate a list of peopl
 
 Prompt-places ...: Tell the AI, in natural language, to generate a list of places with descriptions via Structured Response.
 
+Reset: Reset to the default world and people.
+
 '''.strip()
-            await self.send_message('Send these commands to the Imp to change the world:\n')
+            await self.send_message(msg, button_click.channel_id, self.imp, [button_click.sender])
         elif button_click.button_id == 'step':
             await self.step_conversation(button_click.channel_id, speaker_id=None, txt=None)
         elif button_click.button_id == 'list_memories':
+            world = self.get_world(button_click.channel_id)
             for name, char in self.npcs.items():
+                if name not in world.people:
+                    continue
                 memory_of_name = self.get_memory(button_click.channel_id, name)
                 #msgs = ['What I remember:']+['>'+m+'\n' for m in memory_of_name]
                 msgs = ['What I remember:']+memory_of_name
                 if len(memory_of_name) == 0:
                     msgs = ['What are memories?'] if name == 'DoryFish' else ['I have no memories yet.']
                 msg = '\n.....\n'.join(msgs)
-                await self.send_message(msg, button_click.channel_id, char.character_id, [button_click.sender])
+                await self.send_message(msg, button_click.channel_id, char, [button_click.sender])
         elif button_click.button_id == 'clear_memories':
             await self.send_message('You cast Obliviate on everyone and they forget everything', button_click.channel_id, button_click.sender, [button_click.sender])
             world = self.get_world(button_click.channel_id)
             world.people_memories = {}
-            self.update_to_world(button_click.channel_id, world)
+            await self.update_to_world(button_click.channel_id, world)
         elif button_click.button_id == 'travel':
             if not button_click.arguments:
                 return # Nothing specified.
@@ -226,32 +241,35 @@ Prompt-places ...: Tell the AI, in natural language, to generate a list of place
     async def on_message_up(self, message_up: MessageBody):
         """Add to the history if it is a text message."""
         if message_up.subtype == types.TEXT:
+            #print("GOT MESSAGE for:", message_up.recipients, 'IMP ID is:', self.imp.character_id)
             if len(message_up.recipients) == 1 and message_up.recipients[0] == self.imp.character_id: # Edit world messages.
                 users = await self.fetch_member_ids(message_up.channel_id)
                 txt = message_up.content.text.strip()
-                prompts = {'people':'people', 'places':'places', 'prompt people':'prompt-people',
-                           'prompt places':'prompt-places', 'prompt-people':'prompt-people',
-                           'prompt-places':'prompt-places', 'prompt_people':'prompt-people',
-                           'prompt_places':'prompt-places'}
+                prompts = {'people':'people', 'places':'places',
+                           'prompt people':'prompt-people', 'prompt-people':'prompt-people', 'prompt_people':'prompt-people',
+                           'prompt places':'prompt-places', 'prompt-places':'prompt-places', 'prompt_places':'prompt-places',
+                           'reset':'reset'}
+                for ky, v in list(prompts.items()):
+                    prompts[ky+':'] = v
                 the_prompt = None
+                txt_body = None
                 for p0, p1 in prompts.items():
-                    if txt.startswith(p0):
-                        txt = txt[len(p0):].strip()
-                        the_prompt = p1
-                        break
+                    if txt.lower().startswith(p0.lower()):
+                        if not the_prompt or len(p0)>len(the_prompt):
+                            txt_body = txt[len(p0):].strip()
+                            the_prompt = p1
                 attr = None
                 if the_prompt == 'people':
                     attr = 'people'
                 elif the_prompt == 'places':
                     attr = 'locations'
                 if attr:
-                    if len(pieces) == 1: # Print it out.
-                        txt = json.dumps(getattr(self.get_world(), attr), indent=2)
-                        await self.send_message(message_up, text=txt, recipients=users)
+                    if len(txt_body) == 0: # Print it out.
+                        out = json.dumps(getattr(self.get_world(message_up.channel_id), attr), indent=2)
+                        await self.send_message(message_up, text=out, recipients=users)
                     else:
-                        p1 = pieces[-1]
                         try:
-                            x = json.loads(p1)
+                            x = json.loads(txt_body)
                         except Exception as e:
                             await self.send_message(message_up, text='JSON read error: '+str(e), recipients=users)
                             return
@@ -262,23 +280,28 @@ Prompt-places ...: Tell the AI, in natural language, to generate a list of place
                         x = dict(zip([str(ky) for ky in x.keys()], [str(v) for v in x.values()]))
                         world = self.get_world(message_up.channel_id)
                         setattr(world, attr, x)
-                        self.update_to_world(message_up.channel_id, world)
+                        await self.update_to_world(message_up.channel_id, world)
                 if the_prompt == 'prompt-people':
-                    persons = await gpt.gpt_make_people(txt, temperature=0.5, model="gpt-4o-mini", num=12)
+                    persons = await gpt.gpt_make_people(txt_body, temperature=0.5, model="gpt-4o-mini", num_default=8)
                     world = self.get_world(message_up.channel_id)
                     world.people = persons
                     world.people_memories = {}
-                    await self.update_to_world(world)
-                    await self.send_message(message_up, text='AIs updated:\n'+str(world.people), recipients=users)
-                    self.update_to_world(message_up.channel_id, world)
-                if the_prompt == 'prompt-places':
-                    places = await gpt.gpt_make_places(txt, temperature=0.5, model="gpt-4o-mini", num=6)
+                    await self.update_to_world(message_up.channel_id, world)
+                    await self.send_message(message_up, text='The AI created these people:\n'+str(world.people), recipients=users)
+                elif the_prompt == 'prompt-places':
+                    places = await gpt.gpt_make_places(txt_body, temperature=0.5, model="gpt-4o-mini", num_default=6)
                     world = self.get_world(message_up.channel_id)
                     world.locations = places
                     #world.people_memories = {} # Let them keep old memories from the places.
-                    await self.update_to_world(world)
-                    await self.send_message(message_up, text='Places for the AIs to adventure updated:\n'+str(world.places), recipients=users)
-                    self.update_to_world(message_up.channel_id, world)
+                    await self.update_to_world(message_up.channel_id, world)
+                    await self.send_message(message_up, text='The AI created these places:\n'+str(world.locations), recipients=users)
+                elif the_prompt == 'reset':
+                    await self.update_to_world(message_up.channel_id, worldbuilder.MMOWorld())
+                elif not the_prompt:
+                    await self.send_message(message_up, text='Did not recognize prompt for command:'+str(txt.split(' ')[0]), recipients=users)
+
+                if the_prompt:
+                    await self.send_message(message_up, text='Command finished: '+str(the_prompt), recipients=users)
             else:
                 await self.step_conversation(message_up.channel_id, speaker_id=message_up.sender, txt=message_up.content.text)
         else:

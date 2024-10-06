@@ -25,7 +25,7 @@ class CalendarService(Moobius):
             who = await self.fetch_member_ids(channel_id, False)
         if type(who) is str:
             who = [who]
-        visable_chars = [self.imp.character_id]+(await self.fetch_member_ids(channel_id, False))+[self.npcs[name].character_id for name in sorted(list(world.people.keys()))]
+        visable_chars = [self.imp.character_id]+(await self.fetch_member_ids(channel_id, False))
         await self.send_characters(characters=visable_chars, channel_id=channel_id, recipients=who)
 
     async def _update_buttons(self, channel_id, user_id):
@@ -34,15 +34,15 @@ class CalendarService(Moobius):
         api_component = InputComponent(label="API Key", type=types.TEXT, required=True, placeholder="Nylas API key")
         grant_component = InputComponent(label="Grant ID", type=types.TEXT, required=True, placeholder="Nylas id")
         id_component = InputComponent(label="Calendar ID", type=types.TEXT, required=True, placeholder="Nylas calendar id")
-        history_component = InputComponent(label="How many messages to include?",  type=types.TEXT, required=True, placeholder="16")
-        save_nylas_component = InputComponent(label="Save to Nylas?", type=types.DROPDOWN, required=False, choices=['yes', 'no'], placeholder="no")
+        history_component = InputComponent(label="Look-back or text from oldest message",  type=types.TEXT, required=True, placeholder="16")
+        save_nylas_component = InputComponent(label="Save to your Nylas calendar?", type=types.DROPDOWN, required=False, choices=['yes', 'no'], placeholder="no")
         timezone_component = InputComponent(label="Input your group's timezone", type=types.TEXT, required=True, placeholder="America/Los_Angeles")
 
         api_button_dia = Dialog(title='Input your Nylas keys', components=[api_component, grant_component, id_component])
-        history_dia = Dialog(title='Message look-back', components=[history_component, save_nylas_component])
+        history_dia = Dialog(title='GPT extraction of event in the chat', components=[history_component, save_nylas_component])
         timezone_dia = Dialog(title='Time zone', components=[timezone_component])
         buttons = [Button(button_id='nylas', button_text='Input Nylas info', dialog=api_button_dia),
-                   Button(button_id='calendar_msg', button_text='Compute AI calendar', dialog=history_dia),
+                   Button(button_id='calendar_msg', button_text='AI extract event', dialog=history_dia),
                    Button(button_id='set_timezone', button_text='Set Channel Timezone', dialog=timezone_dia),
                    Button(button_id='test', button_text='test')]
         await self.send_buttons(buttons, channel_id, [user_id])
@@ -76,30 +76,40 @@ class CalendarService(Moobius):
         store = self.channel_stores[button_click.channel_id]
         timezone = store.timezones.get('timezone', 'America/Los_Angeles')
 
-        async def _process_message_pairs(pairs):
+        async def _process_message_pairs(pairs, show_nylas_format=False):
             senders = [p[0] for p in pairs]
             txts = [p[1] for p in pairs]
-            event = await gpt.get_calendar_event(senders, txts, timezone=timezone)
+            try:
+                event = await gpt.get_calendar_event(senders, txts, timezone=timezone)
+            except Exception as e:
+                await self.send_message('Error getting the calender event:\n'+str(e), button_click.channel_id, self.imp, await self.fetch_member_ids(button_click.channel_id))
+                raise e
             await self.send_message('Event scheduled:\n'+gpt.format_event_for_humans(event), button_click.channel_id, self.imp, await self.fetch_member_ids(button_click.channel_id))
 
-            cal_save = button_click.arguments[1].value.lower() in ['yes', 'y', 'true', True]
+            if button_click.arguments:
+                cal_save = button_click.arguments[1].value.lower() in ['yes', 'y', 'true', True] # Nylas save.
+            else:
+                cal_save = False
             if cal_save:
                 api = store.user_nylas_keys.get(button_click.sender)
                 if api:
-                    await gpt.save_event_to_nylas(calendar_evt=event, nylas_api_key=api[0], nylas_grant_id=api[1], nylas_calendar_id=api[1])
+                    gpt.save_event_to_nylas(calendar_evt=event, nylas_api_key=api[0], nylas_grant_id=api[1], nylas_calendar_id=api[1])
                     await self.send_message('Saved to calendar:'+api[2], button_click.channel_id, self.imp, button_click.sender)
                 else:
-                    await self.send_message('No Nylas API to save it to', button_click.channel_id, self.imp, button_click.sender)
-
+                    event1 = gpt.format_event_for_nylas(event)
+                    await self.send_message('No Nylas API keys given to save it to, can paste in this JSON instead:\n'+json.dumps(event1, indent=2), button_click.channel_id, self.imp, button_click.sender)
+            if show_nylas_format:
+                event1 = gpt.format_event_for_nylas(event)
+                await self.send_message('Debug Nylas JSON:\n'+json.dumps(event1, indent=2), button_click.channel_id, self.imp, button_click.sender)
 
         if the_id == 'nylas':
             api = button_click.arguments[0].value
             grant = button_click.arguments[1].value
             cal = button_click.arguments[1].value
             store.user_nylas_keys[button_click.sender] = [api, grant, cal]
-            await self.send_message('Nylas saved!', button_click.channel_id, self.imp, [button_click.sender])
+            await self.send_message('Nylas credentials saved!', button_click.channel_id, self.imp, [button_click.sender])
         elif the_id == 'calendar_msg':
-            name_txt_pairs = store.recent_messages.get(button_click.channel_id, [])
+            name_txt_pairs = store.recent_messages.get('messages', [])
             lookback = button_click.arguments[0].value.lower() # 3 means will include three messages.
             N = len(name_txt_pairs)
             if re.search('[a-zA-Z]', lookback): # Search the message history for this message.
@@ -131,8 +141,8 @@ class CalendarService(Moobius):
             test_pairs.append(['Sarah Johnson', "How about Tuesday at 9:30 AM?"])
             test_pairs.append(['Sarah Johnson', "Haha ok"])
             test_pairs.append(['Sarah Johnson', "sjohnson@vcfinvest.com"])
-            await self.send_message("Testing with this data:\n"+str(test_pairs), button_click.channel_id, button_click.sender, [button_click.sender])
-            await _process_message_pairs(test_pairs)
+            await self.send_message("Testing with this data:\n"+'\n'.join([str(p) for p in test_pairs]), button_click.channel_id, button_click.sender, [button_click.sender])
+            await _process_message_pairs(test_pairs, True)
         else:
             await self.send_message('Unrecognized button: '+the_id, button_click.channel_id, self.imp, [button_click.sender])
 
@@ -140,6 +150,8 @@ class CalendarService(Moobius):
         """Add to the history if it is a text message."""
         if message_up.subtype == types.TEXT:
             message_history = self.channel_stores[message_up.channel_id].recent_messages.get('messages')
+            if not message_history:
+                message_history = []
             sender_name =  (await self.fetch_character_profile(message_up.sender)).name
             message_history.append([sender_name, message_up.content.text]) # Name text pairs.
             while len(message_history) > 96: # Limit the length.

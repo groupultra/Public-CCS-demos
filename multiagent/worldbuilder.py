@@ -38,7 +38,6 @@ def summarize_fresh_spoken_memory(speaker, where_speaker_is, txt):
     #with open('debug/last_speechsummary.txt', 'w') as f:
     #    json.dump(prompt, f, indent=3)
     #short_txt = await gpt.gpt_get_answer(prompt)
-
     return speaker + ' said "'+ txt + '" in the '+where_speaker_is
 
 
@@ -49,8 +48,7 @@ def summarize_fresh_observation_memory(speaker, where_speaker_is, txt):
     #with open('debug/last_seesummary.txt', 'w') as f:
     #    json.dump(prompt, f, indent=3)
     #short_txt = await gpt.gpt_get_answer(prompt)
-
-    return speaker + ' saw '+ txt + ', in the '+where_speaker_is
+    return 'What '+ speaker + ' saw in the '+where_speaker_is+': '+txt
 
 
 def summarize_fresh_thought_memory(speaker, where_speaker_is, txt):
@@ -60,8 +58,7 @@ def summarize_fresh_thought_memory(speaker, where_speaker_is, txt):
     #with open('debug/last_thinksummary.txt', 'w') as f:
     #    json.dump(prompt, f, indent=3)
     #short_txt = await gpt.gpt_get_answer(prompt)
-
-    return speaker + ' thought about '+ txt + ', in the '+where_speaker_is
+    return 'What '+ speaker + ' thought about in the '+where_speaker_is+': '+txt
 
 
 def summarize_fresh_move_memory(speaker, where_speaker_is, next_loc):
@@ -170,6 +167,20 @@ class MMOWorld():
             self.people_where[name] = random.choice(_locs)
         self.speaker_history = [] # [speaker_name, spoken_mem, where_speaker_is]
 
+    def compat(self):
+        """Makes sure that the world is self-compatable, i.e. does not have data that disagrees with other data."""
+        locs = list(self.locations.keys())
+        for name in self.people.keys():
+            if name not in self.people_memories:
+                self.people_memories[name] = []
+            if name not in self.people_where.keys():
+                self.people_where[name] = random.choice(locs)
+        for name in list(self.people_memories.keys()):
+            if name not in self.people:
+                del self.people_memories[name]
+        for name, place in self.people_where.items():
+            if place not in self.locations:
+                self.people_where[name] = random.choice(locs)
 
     def get_prepend(self, use_reAct, location, speakers_here, speaker_name, has_memory):
         """This is the system part of the prompt that goes before the memory itself."""
@@ -277,15 +288,17 @@ class MMOWorld():
             where_speaker_is = self.people_where[speaker_name]
         speakers_here = []
         for name in names:
+            if name not in self.people_where:
+                self.people_where[name] = sorted(list(self.locations.keys()))[0]
             if self.people_where[name] == where_speaker_is or where_speaker_is=='all':
                 speakers_here.append(name)
 
         is_ai = not txt
-        observation_mem = None
-        thought_mem = None
-        spoken_words = ''; spoken_mem = None
-        next_loc = None
-        move_mem = None
+        observation = ''
+        thought = ''
+        speech = ''
+        action = ''
+        next_loc = ''
         if is_ai: # Use AI to determine the txt.
 
             speaker_memory = self.people_memories.get(speaker_name, [])
@@ -302,7 +315,7 @@ class MMOWorld():
             with open('debug/debug_last_prompt.txt', 'w') as f:
                 json.dump(the_messages, f, indent=3)
             if is_reAct:
-                tmp_sgn = '--<>--'
+                tmp_sgn = '--<>--' # A unique signature that is not in the AI.
                 txt = gpt_txt
                 for kw in ['Observation', 'Thought', 'Action', 'Speech']:
                     txt = txt.replace(kw+':',f'\n## {kw}\n')
@@ -312,17 +325,19 @@ class MMOWorld():
                 for p in pieces:
                     p = p.strip()
                     if p.startswith('Observation:'):
-                        observation_mem = p.replace('Observation:','')
+                        observation = p.replace('Observation:','').strip()
                     if p.startswith('Thought:'):
-                        thought_mem = p.replace('Thought:','')
+                        thought = p.replace('Thought:','').strip()
                     if p.startswith('Speech:'):
-                        spoken_words = p.replace('Speech:','')
+                        speech = p.replace('Speech:','').strip()
+                        if speech.startswith('"') and speech.endswith('"'):
+                            speech = speech[1:-1]
                     if p.startswith('Action:'):
-                        p = p.replace('Action:','')
-                        next_loc = _maybe_moving_to(where_speaker_is, p, list(self.locations.keys()))
+                        action = p.replace('Action:','').strip()
+                        next_loc = _maybe_moving_to(where_speaker_is, action, list(self.locations.keys()))
             else:
                 txt = gpt_txt
-                spoken_words = txt
+                speech = txt
                 crowd_score = len(speakers_here)/(len(self.people)+0.00001) # Higher chance of leaving crowded areas.
                 move_chance = 0.05 + 0.45*crowd_score
 
@@ -330,17 +345,23 @@ class MMOWorld():
                     next_loc = random.choice(list(self.locations.keys()))
                     self.locations[speaker_name] = next_loc
         else:
-            spoken_words = txt
+            speech = txt
 
-        if spoken_words:
-            if send_message_f and is_ai:
-                send_message_f(speaker_name, spoken_words)
-            self.speaker_history.append([speaker_name, spoken_words, where_speaker_is])
-            spoken_mem = summarize_fresh_spoken_memory(speaker_name, where_speaker_is, spoken_words)
-        if observation_mem:
-            observation_mem = summarize_fresh_observation_memory(speaker_name, where_speaker_is, observation_mem)
-        if thought_mem:
-            thought_mem = summarize_fresh_thought_memory(speaker_name, where_speaker_is, thought_mem)
+        if send_message_f and is_ai: # Report what the AIs say.
+            if is_reAct:
+                msg = "Observation:\n"+observation+'\n\nThought:\n'+thought+'\n\nSpeech:\n'+speech+'\n\nAction:\n'+action
+            else:
+                msg = speech
+            send_message_f(speaker_name, msg)
+
+        observation_mem = thought_mem = spoken_mem = move_mem = None
+        if speech:
+            self.speaker_history.append([speaker_name, speech, where_speaker_is])
+            spoken_mem = summarize_fresh_spoken_memory(speaker_name, where_speaker_is, speech)
+        if observation:
+            observation_mem = summarize_fresh_observation_memory(speaker_name, where_speaker_is, observation)
+        if thought:
+            thought_mem = summarize_fresh_thought_memory(speaker_name, where_speaker_is, thought)
         if next_loc and next_loc != where_speaker_is:
             move_mem = summarize_fresh_move_memory(speaker_name, where_speaker_is, next_loc)
 
@@ -356,7 +377,7 @@ class MMOWorld():
 
         mems_tasks = {}
         for name, v in new_mems.items():
-            if name != 'DoryFish': # Finding Nemo
+            if name != 'DoryFish' and name in self.people: # Finding Nemo
                 mems_tasks[name] = append_simplify_memories(memories=self.people_memories.get(name, []), new_memories=v)
 
         if len(mems_tasks) > 0:

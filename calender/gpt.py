@@ -19,30 +19,49 @@ async def get_calendar_event(message_names, message_contents, timezone='America/
     client = OpenAIClient(timezone=timezone)
     description = '\n\n'.join([name+': '+txt for name, txt in zip(message_names, message_contents)])
 
-    parsed_event = client.parse_event_description(description) # These are the three calls to the AI
-    extracted_participants_raw = client.extract_participants(description)
-    end_time_str = client.extract_event_end_time(description)
+    parsed_event = await client.parse_event_description(description) # These are the three calls to the AI
+    extracted_participants_raw = await client.extract_participants(description)
+    #print("EXTRACTED EVENT:", parsed_event, "EXTRA PARTICIPANTS:", extracted_participants_raw)
+    end_time_str = await client.extract_event_end_time(description)
 
     start_time_str = parsed_event['when'] # No such function: client.extract_event_start_time(description)
 
     parsed_event['start_time'] = standardize_time(start_time_str, timezone)
-    parsed_event['end_time'] = standardize_time(end_time_str, timezone)
+    parsed_event['end_time'] = parsed_event['start_time']+3600 if end_time_str == 'unknown' else standardize_time(end_time_str, timezone)
     del parsed_event['when']
 
-    extracted_participants = process_participants(extracted_participants_raw)
-    parsed_event['bonus_participants'] = extracted_participants
+    emails, extracted_participants_no_email = process_participants(extracted_participants_raw)
+    participant_nameemails = []
+    for pname in extracted_participants_no_email+list(emails.keys()):
+        participant_nameemails.append({'name':pname, 'email': emails.get(pname, 'unknown_email')})
+    parsed_event['participants'] = participant_nameemails
     return parsed_event
 
 
-async def save_event_to_nylas(calendar_evt, nylas_api_key, nylas_grant_id, nylas_calendar_id):
-    """Saves a dict calendar evt to a Nylas calendar. No API used."""
-    #client = OpenAIClient(timezone=timezone)
-    evt = format_event_for_nylas(calendar_evt)
+def format_event_for_humans(parsed_event):
+    """Returns a human-readable event given the output of get_calendar_event()."""
+    title = parsed_event['title']
+    participants = [(p['name'], p['email']) for p in parsed_event['participants']]
+    start_time = datetime.fromtimestamp(parsed_event['start_time']).strftime('%Y-%m-%d %H:%M:%S')
+    end_time = datetime.fromtimestamp(parsed_event['end_time']).strftime('%Y-%m-%d %H:%M:%S')
+    location = parsed_event['location']
+    description = parsed_event['description']
+
+    # Format the output:
+    output = f"Title: {title}\n" \
+                f"Participants:\n" + "\n".join([f"  {name} ({email})" for name, email in participants] if participants else ['(no participants)']) + "\n" \
+                f"Start Time (UTC): {start_time}\n" \
+                f"End Time (UTC): {end_time}\n" \
+                f"Location: {location}\n" \
+                f"Description: {description}"
+    return output
+
+
+def save_event_to_nylas(parsed_event, nylas_api_key, nylas_grant_id, nylas_calendar_id):
+    """Saves a dict calendar evt (output of get_calendar_event()) to a Nylas calendar. No OpenAI used."""
+    evt = format_event_for_nylas(parsed_event)
     client = NylasAPI(nylas_api_key, nylas_grant_id)
     client.create_event(calendar_id=nylas_calendar_id, event_data=evt)
-
-    # Extract and process participants from the event description
-    #emails, no_emails = self.event_processor.process_participants(extracted_participants_raw)
 
 
 ################ Non-AI support functions ####################
@@ -66,7 +85,7 @@ def process_participants(participants_json: str) -> tuple[Dict[str, str], List[s
         for participant in participants:
             name = participant["name"]
             email = participant.get("email")
-            if email and EmailStr._validate(email):
+            if email and EmailStr._validate(email): # pip install pydantic[email]
                 emails_dict[name] = email
             else:
                 names_without_valid_email.append(name)
@@ -77,26 +96,11 @@ def process_participants(participants_json: str) -> tuple[Dict[str, str], List[s
         raise ValueError(f"Error processing participants: {e}")
 
 
-def format_event_for_humans(parsed_event):
-    """Returns a human-readable event."""
-    title = parsed_event['title']
-    participants = [(p['name'], p['email']) for p in parsed_event['participants']]
-    start_time = datetime.fromtimestamp(parsed_event['start_time']).strftime('%Y-%m-%d %H:%M:%S')
-    location = parsed_event['location']
-    description = parsed_event['description']
-
-    # Format the output
-    output = f"Title: {title}\n" \
-                f"Participants:\n" + "\n".join([f"  Name: {name}, Email: {email}" for name, email in participants]) + "\n" \
-                f"Start Time (UTC): {start_time}\n" \
-                f"Location: {location}\n" \
-                f"Description: {description}"
-    return output
-
-
-def format_event_for_nylas(parsed_event: Dict, emails_dict: Dict[str, str], start_time: int, end_time: int) -> Dict:
+def format_event_for_nylas(parsed_event: Dict) -> Dict:
     """The start and end times must be an email dict."""
-    participants = [{"name": name, "email": email} for name, email in emails_dict.items()]
+    start_time = parsed_event['start_time']
+    end_time = parsed_event['end_time']
+    participants = parsed_event['participants']
     event_data = {
         "title": parsed_event['title'],
         "status": "confirmed",
@@ -195,11 +199,11 @@ class OpenAIClient:
         current_time = datetime.now(user_tz).strftime("%Y-%m-%d %H:%M:%S")
         # Parses the event description to extract structured event details using OpenAI
         system_message = f"Extract the event details based on the following structure: title, description, when, location, and participants. The current date and time is {current_time}. Please ensure WHEN is a date or time description that can be converted into a standard date format. Put some details in the title. Missing parts fill with 'unknown'."
-        completion = await self.client.chat.completions.create(
+        completion = await self.client.beta.chat.completions.parse(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": system_message},
-                {"role": "user", "content": description},
+                {"role": "user", "content": str(description)},
             ],
             response_format=CalendarEvent
         )
@@ -246,7 +250,8 @@ class OpenAIClient:
             ],
             response_format={"type": "json_object"}
         )
-        return response.choices[0].message.content
+        out = json.loads(response.choices[0].message.content)
+        return out['end_time']
 
 
 def _ensure_ai_key():
