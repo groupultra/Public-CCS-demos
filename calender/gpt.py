@@ -59,19 +59,20 @@ def format_event_for_humans(parsed_event):
 
 def save_event_to_nylas(parsed_event, nylas_api_key, nylas_grant_id, nylas_calendar_id):
     """Saves a dict calendar evt (output of get_calendar_event()) to a Nylas calendar. No OpenAI used."""
-    evt = format_event_for_nylas(parsed_event)
+    evt, _ = format_event_for_nylas(parsed_event)
     client = NylasAPI(nylas_api_key, nylas_grant_id)
-    client.create_event(calendar_id=nylas_calendar_id, event_data=evt)
+    return client.create_event(calendar_id=nylas_calendar_id, event_data=evt)
 
 
 ################ Non-AI support functions ####################
 
 def standardize_time(time_str: str, timezone: str) -> int:
-    """Non-ai natrual-language-ish time string processing. Parses it into Unix int time."""
+    """Non-ai natrual-language-ish time string processing. Parses it into Unix int time UTC."""
     parsed_time = parser.parse(time_str, fuzzy=True)
     user_tz = pytz.timezone(timezone)
-    user_time = user_tz.localize(parsed_time)
-    utc_time = user_time.astimezone(pytz.utc)
+    if not hasattr(parsed_time, 'tzinfo') or not parsed_time.tzinfo:
+        parsed_time = user_tz.localize(parsed_time) # Naive times only.
+    utc_time = parsed_time.astimezone(pytz.utc)
     return int(utc_time.timestamp())
 
 
@@ -96,16 +97,23 @@ def process_participants(participants_json: str) -> tuple[Dict[str, str], List[s
         raise ValueError(f"Error processing participants: {e}")
 
 
-def format_event_for_nylas(parsed_event: Dict) -> Dict:
+def format_event_for_nylas(parsed_event: Dict) -> tuple[Dict, List[str]]:
     """The start and end times must be an email dict."""
     start_time = parsed_event['start_time']
     end_time = parsed_event['end_time']
     participants = parsed_event['participants']
+    participants1 = []
+    excluded_members = []
+    for p in participants:
+        if p.get('email') and p['email'].lower() not in ['unknown_email', 'unknown', '']:
+            participants1.append(p)
+        else:
+            excluded_members.append(p['name'])
     event_data = {
         "title": parsed_event['title'],
         "status": "confirmed",
         "busy": True,
-        "participants": participants,
+        "participants": participants1,
         "description": parsed_event['description'],
         "when": {
             "object": "timespan",
@@ -114,7 +122,7 @@ def format_event_for_nylas(parsed_event: Dict) -> Dict:
         },
         "location": parsed_event['location']
     }
-    return event_data
+    return event_data, excluded_members
 
 
 def generate_ics_calender(events, filename=None):
